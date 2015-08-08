@@ -1,0 +1,4 @@
+[package]
+name = "nosh"
+version = "0.1.0"
+authors = ["Skyler Berg <skylertheberg@gmail.com>"]
