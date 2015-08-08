@@ -3,6 +3,8 @@ use std::io::Write;
 use std::process::Command;
 use std::iter::FromIterator;
 
+mod utilities;
+
 fn main() {
     loop {
         let mut input = String::new();
@@ -34,6 +36,9 @@ fn get_ps1() -> String {
 }
 
 pub fn run(command : &str) -> Option<String> {
+    if run_builtin_if_possible(command) {
+        return None;
+    }
     let command = build_command(command);
     if command.is_some() {
         match command.unwrap().output() {
@@ -58,6 +63,25 @@ fn build_command(input : &str) -> Option<Command> {
     } else {
         None
     }
+}
+
+fn run_builtin_if_possible(input: &str) -> bool {
+    match get_program(input) {
+        Some("cd") => {
+            utilities::cd(None);
+            true
+        },
+        Some("exit") => {
+            utilities::exit();
+            true
+        }
+        Some(":") => true,
+        _ => false
+    }
+}
+
+fn get_program(input : &str) -> Option<&str> {
+    input.split_whitespace().next()
 }
 
 #[cfg(test)]
