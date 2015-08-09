@@ -4,6 +4,7 @@ extern crate lazy_static;
 use std::io;
 use std::io::Write;
 use std::process::Command;
+use std::process::ExitStatus;
 use std::iter::FromIterator;
 
 mod utilities;
@@ -16,10 +17,7 @@ fn main() {
             .ok()
             .expect("Failed to read line");
         let trimmed_input = input.trim_right();
-        match run(&trimmed_input) {
-            Some(result) => print!("{}", result),
-            None => ()
-        }
+        run(&trimmed_input);
     }
 }
 
@@ -38,7 +36,7 @@ fn get_ps1() -> String {
     }
 }
 
-pub fn run(command : &str) -> Option<String> {
+pub fn run(command : &str) -> Option<ExitStatus> {
     let mut iter = command.split_whitespace();
     let program = match iter.next() {
         Some(program) => program,
@@ -51,9 +49,9 @@ pub fn run(command : &str) -> Option<String> {
     }
     let command = build_command(command);
     if command.is_some() {
-        match command.unwrap().output() {
-            Ok(output) => Some(String::from_utf8(output.stdout).unwrap()),
-            Err(_) => Some(String::from("Error running command\n"))
+        match command.unwrap().status() {
+            Ok(status) => Some(status),
+            Err(_) => None
         }
     }
     else {
