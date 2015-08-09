@@ -1,32 +1,22 @@
-#[macro_use]
-extern crate lazy_static;
-
 use std::io;
 use std::io::Write;
 use std::process::Command;
 use std::process::ExitStatus;
 use std::iter::FromIterator;
 
+#[macro_use]
+extern crate lazy_static;
+extern crate readline;
+
 mod utilities;
 
 fn main() {
     loop {
-        let mut input = String::new();
-        show_prompt();
-        io::stdin().read_line(&mut input)
-            .ok()
-            .expect("Failed to read line");
+        let mut input = readline::readline(&get_ps1()).unwrap();
+        readline::add_history(&input);
         let trimmed_input = input.trim_right();
         run(&trimmed_input);
     }
-}
-
-pub fn show_prompt() {
-    print!("{}", get_ps1());
-    io::stdout()
-        .flush()
-        .ok()
-        .expect("Failed to display prompt");
 }
 
 fn get_ps1() -> String {
@@ -91,18 +81,13 @@ mod tests {
     use super::*;
 
     #[test]
-    fn show_prompt_should_not_panic() {
-        show_prompt();
-    }
-
-    #[test]
     fn run_ls_should_be_some() {
         assert!(run("ls").is_some());
     }
 
     #[test]
     fn run_ls_with_args_should_be_some() {
-        assert!(run("ls -al").is_some());
+        assert!(run("ls -a").is_some());
     }
 
     #[test]
