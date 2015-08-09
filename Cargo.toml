@@ -2,3 +2,9 @@
 name = "nosh"
 version = "0.1.0"
 authors = ["Skyler Berg <skylertheberg@gmail.com>"]
+
+[dependencies]
+lazy_static = "0.1.*"
+
+[dev-dependencies]
+tempdir = "0.3"

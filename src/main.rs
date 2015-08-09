@@ -1,3 +1,6 @@
+#[macro_use]
+extern crate lazy_static;
+
 use std::io;
 use std::io::Write;
 use std::process::Command;
@@ -36,7 +39,14 @@ fn get_ps1() -> String {
 }
 
 pub fn run(command : &str) -> Option<String> {
-    if run_builtin_if_possible(command) {
+    let mut iter = command.split_whitespace();
+    let program = match iter.next() {
+        Some(program) => program,
+        None => return None
+    };
+    let args = iter.collect::<Vec<_>>();
+
+    if run_builtin_if_possible(program, args) {
         return None;
     }
     let command = build_command(command);
@@ -56,32 +66,26 @@ fn build_command(input : &str) -> Option<Command> {
     let program = iter.next();
     if program.is_some() {
         let mut command = Command::new(program.unwrap());
-        for arg in iter {
-            command.arg(arg);
-        }
+        command.args(&iter.collect::<Vec<_>>());
         Some(command)
     } else {
         None
     }
 }
 
-fn run_builtin_if_possible(input: &str) -> bool {
-    match get_program(input) {
-        Some("cd") => {
-            utilities::cd(None);
+fn run_builtin_if_possible(program: &str, args: Vec<&str>) -> bool {
+    match program {
+        "cd" => {
+            utilities::cd(args);
             true
         },
-        Some("exit") => {
+        "exit" => {
             utilities::exit();
             true
         }
-        Some(":") => true,
+        ":" => true,
         _ => false
     }
-}
-
-fn get_program(input : &str) -> Option<&str> {
-    input.split_whitespace().next()
 }
 
 #[cfg(test)]
