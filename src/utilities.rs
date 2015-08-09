@@ -1,7 +1,7 @@
 use std::env;
 use std::process;
 
-pub fn cd(args : Vec<&str>) {
+pub fn cd(args : &Vec<String>) {
     match args.first() {
         Some(path) => change_directory(path),
         None => {
@@ -60,10 +60,14 @@ mod tests {
         };
     }
 
+    fn string_vec(vec : Vec<&str>) -> Vec<String> {
+        vec.into_iter().map(String::from).collect()
+    }
+
     #[test]
     fn cd_root() {
         let mutex = ENV_VAR_MUTEX.lock().unwrap();
-        cd(vec!["/"]);
+        cd(&string_vec(vec!["/"]));
         match env::var("PWD") {
             Ok(pwd) => assert!(pwd == "/"),
             Err(_) => panic!("PWD should be set.")
@@ -73,7 +77,7 @@ mod tests {
     #[test]
     fn cd_etc() {
         let mutex = ENV_VAR_MUTEX.lock().unwrap();
-        cd(vec!["/etc"]);
+        cd(&string_vec(vec!["/etc"]));
         match env::var("PWD") {
             Ok(pwd) => assert!(pwd == "/etc"),
             Err(_) => panic!("PWD should be set.")
@@ -83,7 +87,7 @@ mod tests {
     #[test]
     fn cd_no_arg() {
         let mutex = ENV_VAR_MUTEX.lock().unwrap();
-        cd(vec![]);
+        cd(&string_vec(vec![]));
         match env::var("PWD") {
             Ok(pwd) => match env::var("HOME") {
                 Ok(home) => assert!(pwd == home),
@@ -99,7 +103,7 @@ mod tests {
         let old_home = env::var("HOME");
         let current_pwd = env::current_dir();
         env::remove_var("HOME");
-        cd(vec![]);
+        cd(&string_vec(vec![]));
         match (current_pwd, env::current_dir()) {
             (Ok(expected), Ok(actual)) => assert_eq!(expected, actual),
             (Err(expected), Err(actual)) => (),
@@ -124,12 +128,12 @@ mod tests {
             .path()
             .to_str()
             .unwrap();
-        cd(vec![first]);
-        cd(vec![second]);
-        cd(vec!["-"]);
+        cd(&string_vec(vec![first]));
+        cd(&string_vec(vec![second]));
+        cd(&string_vec(vec!["-"]));
         assert_eq!(first, env::current_dir().ok().unwrap().to_str().unwrap());
         assert_eq!(second, env::var("OLDPWD").ok().unwrap());
-        cd(vec!["-"]);
+        cd(&string_vec(vec!["-"]));
         assert_eq!(second, env::current_dir().ok().unwrap().to_str().unwrap());
         assert_eq!(first, env::var("OLDPWD").ok().unwrap());
     }
@@ -151,8 +155,8 @@ mod tests {
             .split('/')
             .last()
             .unwrap();
-        cd(vec![parent_path]);
-        cd(vec![child_dir_name]);
+        cd(&string_vec(vec![parent_path]));
+        cd(&string_vec(vec![child_dir_name]));
         assert_eq!(child_path, env::current_dir().ok().unwrap().to_str().unwrap());
     }
 

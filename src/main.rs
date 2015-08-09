@@ -9,13 +9,14 @@ extern crate lazy_static;
 extern crate readline;
 
 mod utilities;
+mod lexer;
 
 fn main() {
     loop {
         let mut input = readline::readline(&get_ps1()).unwrap();
         readline::add_history(&input);
-        let trimmed_input = input.trim_right();
-        run(&trimmed_input);
+        input.push('\n');
+        run(&input);
     }
 }
 
@@ -27,41 +28,30 @@ fn get_ps1() -> String {
 }
 
 pub fn run(command : &str) -> Option<ExitStatus> {
-    let mut iter = command.split_whitespace();
+    let mut iter = lexer::lex(command).into_iter();
     let program = match iter.next() {
         Some(program) => program,
         None => return None
     };
     let args = iter.collect::<Vec<_>>();
 
-    if run_builtin_if_possible(program, args) {
+    if run_builtin_if_possible(&program, &args) {
         return None;
     }
-    let command = build_command(command);
-    if command.is_some() {
-        match command.unwrap().status() {
-            Ok(status) => Some(status),
-            Err(_) => None
-        }
-    }
-    else {
-        None
+    let mut command = build_command(&program, &args);
+    match command.status() {
+        Ok(status) => Some(status),
+        Err(_) => None
     }
 }
 
-fn build_command(input : &str) -> Option<Command> {
-    let mut iter = input.split_whitespace();
-    let program = iter.next();
-    if program.is_some() {
-        let mut command = Command::new(program.unwrap());
-        command.args(&iter.collect::<Vec<_>>());
-        Some(command)
-    } else {
-        None
-    }
+fn build_command(program : &str, args : &Vec<String>) -> Command {
+    let mut command = Command::new(program);
+    command.args(&args.into_iter().collect::<Vec<_>>());
+    command
 }
 
-fn run_builtin_if_possible(program: &str, args: Vec<&str>) -> bool {
+fn run_builtin_if_possible(program: &str, args: &Vec<String>) -> bool {
     match program {
         "cd" => {
             utilities::cd(args);
@@ -82,7 +72,7 @@ mod tests {
 
     #[test]
     fn run_ls_should_be_some() {
-        assert!(run("ls").is_some());
+        assert!(run("ls\n").is_some());
     }
 
     #[test]
