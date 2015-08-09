@@ -27,11 +27,14 @@ fn change_directory(path : &str) {
         print!("{}", String::from_utf8(output.stdout).unwrap());
     }
     else {
-        env::set_current_dir(path);
+        match env::set_current_dir(path) {
+            Err(e) => println!("{}", e),
+            _ => ()
+        }
         env::set_var("PWD", path);
-        match original_pwd{
+        match original_pwd {
             Ok(old_pwd) => env::set_var("OLDPWD", old_pwd),
-            Err(_) => () // No action needed if PWD was unset
+            Err(_) => ()  // No action needed if PWD was unset
         }
     }
 }
@@ -129,6 +132,28 @@ mod tests {
         cd(vec!["-"]);
         assert_eq!(second, env::current_dir().ok().unwrap().to_str().unwrap());
         assert_eq!(first, env::var("OLDPWD").ok().unwrap());
+    }
+
+    #[test]
+    fn cd_relative() {
+        let mutex = ENV_VAR_MUTEX.lock().unwrap();
+        let parent = tempdir::TempDir::new("parent").unwrap();
+        let child = tempdir::TempDir::new_in(parent.path(), "child").unwrap();
+        let parent_path = parent
+            .path()
+            .to_str()
+            .unwrap();
+        let child_path = child
+            .path()
+            .to_str()
+            .unwrap();
+        let child_dir_name = child_path
+            .split('/')
+            .last()
+            .unwrap();
+        cd(vec![parent_path]);
+        cd(vec![child_dir_name]);
+        assert_eq!(child_path, env::current_dir().ok().unwrap().to_str().unwrap());
     }
 
 }
