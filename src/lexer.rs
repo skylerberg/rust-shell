@@ -1,16 +1,110 @@
+lazy_static! {
+    static ref OPERATORS : Vec<&'static str> = vec![
+        "&&",
+        "||",
+        ";;",
+        "<<",
+        ">>",
+        "<<-",
+    ];
+
+    static ref OPERATOR_STARTERS : Vec<char> = vec![
+        '&',
+        '|',
+        ';',
+        '<',
+        '>',
+    ];
+}
+
 struct Lexer {
-    state : LexerState,
+    state : LexerQuotingState,
     escaping : bool,
+    current_token : String,
+    tokens : Vec<String>,
+    current_token_type : TokenType,
+}
+
+enum LexerQuotingState {
+    Normal,
+    WeakQuoting,
+    StrongQuoting,
+    HereDoc,
+    Comment,
+}
+
+enum TokenType {
+    Word,
+    Operator,
+    Undetermined,
 }
 
 impl Lexer {
     fn process_char(&mut self, character : char) -> Option<char> {
         match self.state {
-            LexerState::WeakQuoting => process_char_weak_quote(self, character),
-            LexerState::StrongQuoting => process_char_strong_quote(self, character),
-            LexerState::Comment => process_char_comment(self, character),
+            LexerQuotingState::WeakQuoting => process_char_weak_quote(self, character),
+            LexerQuotingState::StrongQuoting => process_char_strong_quote(self, character),
+            LexerQuotingState::Comment => process_char_comment(self, character),
             _ => process_char_normal(self, character),
         }
+    }
+
+    fn delimit_token(mut self) -> Lexer {
+        if !self.current_token.is_empty() {
+            let result = self.current_token;
+            self.tokens.push(result);
+            self.current_token = String::new();
+            self.current_token_type = TokenType::Undetermined;
+        }
+        self
+    }
+
+    fn should_delimit(&self, next : char) -> bool {
+
+        match self.state {  // We should not delimit if we are quoting
+            LexerQuotingState::Normal => (),
+            _ => return false,
+        }
+
+        let whitespace = vec![' ', '\n', '\t'];
+        if whitespace.contains(&next) {
+            return true;
+        }
+
+        match self.current_token_type {
+            TokenType::Word => {
+                if OPERATOR_STARTERS.contains(&next) && !self.escaping {
+                    return true;
+                }
+            },
+            TokenType::Operator => {
+                let position = self.current_token.len();
+                for operator in OPERATORS.iter() {
+                    let nth_character = operator.chars().nth(position);
+                    if nth_character.is_some() {
+                        if next == nth_character.unwrap() {
+                            return false;
+                        }
+                    }
+                }
+                return true;
+            },
+            _ => (),
+        }
+
+        false
+    }
+
+    fn push_char(&mut self, character : char) {
+        if self.current_token.is_empty() {
+            if OPERATOR_STARTERS.contains(&character) {
+                self.current_token_type = TokenType::Operator;
+            }
+            else {
+                self.current_token_type = TokenType::Word;
+            }
+        }
+        self.current_token.push(character);
     }
 }
 
@@ -28,15 +122,15 @@ fn process_char_normal(lexer : &mut Lexer, character : char) -> Option<char> {
         return None;
     }
     if character == '\'' {
-        lexer.state = LexerState::StrongQuoting;
+        lexer.state = LexerQuotingState::StrongQuoting;
         return None;
     }
     if character == '"' {
-        lexer.state = LexerState::WeakQuoting;
+        lexer.state = LexerQuotingState::WeakQuoting;
         return None;
     }
     if character == '#' {
-        lexer.state = LexerState::Comment;
+        lexer.state = LexerQuotingState::Comment;
         return None;
     }
     Some(character)
@@ -48,7 +142,7 @@ fn process_char_comment(lexer : &mut Lexer,  character : char) -> Option<char> {
 
 fn process_char_strong_quote(lexer : &mut Lexer, character : char) -> Option<char> {
     if character == '\'' {
-        lexer.state = LexerState::Normal;
+        lexer.state = LexerQuotingState::Normal;
         None
     }
     else {
@@ -66,60 +160,52 @@ fn process_char_weak_quote(lexer : &mut Lexer, character : char) -> Option<char>
         return None;
     }
     if character == '"' {
-        lexer.state = LexerState::Normal;
+        lexer.state = LexerQuotingState::Normal;
         return None;
     }
     Some(character)
 }
 
-enum LexerState {
-    Normal,
-    WeakQuoting,
-    StrongQuoting,
-    HereDoc,
-    Comment,
-}
-
 /// lex expects to receive a newline terminated string.
 /// lex should only be used on a single line at a time.
 pub fn lex(input : &str) -> Vec<String> {
-    let mut lexer = Lexer { escaping: false, state: LexerState::Normal };
-    let mut result : Vec<String> = vec![];
+    let mut lexer = Lexer { 
+        escaping: false, 
+        state: LexerQuotingState::Normal,
+        current_token: String::new(),
+        tokens : vec![],
+        current_token_type : TokenType::Undetermined,
+    };
     let whitespace = vec![' ', '\n', '\t'];
-    let mut current_lexeme = String::new();
     let special = vec!['`', '$', '\\'];  // Part of terrible escape hack
     for character in input.chars() {
 
         // TODO(Skyler) Fix terrible hack to make escaping work
         match lexer.state {
-            LexerState::WeakQuoting => {
+            LexerQuotingState::WeakQuoting => {
                 if lexer.escaping && !special.contains(&character) {
-                    current_lexeme.push('\\');
+                    lexer.push_char('\\');
                 }
             },
             _ => (),
         }
 
+        if lexer.should_delimit(character) {
+            lexer = lexer.delimit_token();
+        }
+
         match lexer.process_char(character) {
-            Some(chr) => current_lexeme.push(chr),
+            Some(chr) => lexer.push_char(chr),
             None => (),
         }
 
-        if whitespace.contains(&character) {
-            match lexer.state {
-                LexerState::WeakQuoting => {
-                }
-                LexerState::StrongQuoting => (),
-                _ => {
-                    if !current_lexeme.is_empty() {
-                        result.push(current_lexeme);
-                        current_lexeme = String::new();
-                    }
-                }
-            }
-        }
     }
-    result
+
+    let has_remaining_token = !lexer.current_token.is_empty();
+    if has_remaining_token {
+        lexer = lexer.delimit_token();
+    }
+    lexer.tokens
 }
 
 #[cfg(test)]
@@ -186,4 +272,17 @@ mod tests {
         assert_eq!(expected, actual);
     }
 
+    #[test]
+    fn lex_operator() {
+        let expected = vec!["cd", "&&", "ls"];
+        let actual = lex("cd&&ls\n");
+        assert_eq!(expected, actual);
+    }
+
+    #[test]
+    fn lex_many_operators() {
+        let expected = vec!["cd", "&&", "||", "<<-", "ls"];
+        let actual = lex("cd&&||<<-ls");
+        assert_eq!(expected, actual);
+    }
 }
