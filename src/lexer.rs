@@ -1,24 +1,20 @@
 struct Lexer {
-    state : QuoteStatus,
+    state : LexerState,
     escaping : bool,
 }
 
-trait LexerState {
-    fn process_char(&mut self, character : char) -> Option<char>;
-}
-
-impl LexerState for Lexer {
+impl Lexer {
     fn process_char(&mut self, character : char) -> Option<char> {
         match self.state {
-            QuoteStatus::None => process_char_not_quoting(self, character),
-            QuoteStatus::Weak => process_char_weak_quote(self, character),
-            QuoteStatus::Strong => process_char_strong_quote(self, character),
-            _ => process_char_strong_quote(self, character),
+            LexerState::WeakQuoting => process_char_weak_quote(self, character),
+            LexerState::StrongQuoting => process_char_strong_quote(self, character),
+            LexerState::Comment => process_char_comment(self, character),
+            _ => process_char_normal(self, character),
         }
     }
 }
 
-fn process_char_not_quoting(lexer : &mut Lexer, character : char) -> Option<char> {
+fn process_char_normal(lexer : &mut Lexer, character : char) -> Option<char> {
     if lexer.escaping {
         lexer.escaping = false;
         return Some(character);
@@ -32,19 +28,27 @@ fn process_char_not_quoting(lexer : &mut Lexer, character : char) -> Option<char
         return None;
     }
     if character == '\'' {
-        lexer.state = QuoteStatus::Strong;
+        lexer.state = LexerState::StrongQuoting;
         return None;
     }
     if character == '"' {
-        lexer.state = QuoteStatus::Weak;
+        lexer.state = LexerState::WeakQuoting;
+        return None;
+    }
+    if character == '#' {
+        lexer.state = LexerState::Comment;
         return None;
     }
     Some(character)
 }
 
+fn process_char_comment(lexer : &mut Lexer,  character : char) -> Option<char> {
+    None
+}
+
 fn process_char_strong_quote(lexer : &mut Lexer, character : char) -> Option<char> {
     if character == '\'' {
-        lexer.state = QuoteStatus::None;
+        lexer.state = LexerState::Normal;
         None
     }
     else {
@@ -62,22 +66,24 @@ fn process_char_weak_quote(lexer : &mut Lexer, character : char) -> Option<char>
         return None;
     }
     if character == '"' {
-        lexer.state = QuoteStatus::None;
+        lexer.state = LexerState::Normal;
         return None;
     }
     Some(character)
 }
 
-enum QuoteStatus {
-    None,
-    Weak,
-    Strong,
+enum LexerState {
+    Normal,
+    WeakQuoting,
+    StrongQuoting,
     HereDoc,
+    Comment,
 }
 
 /// lex expects to receive a newline terminated string.
+/// lex should only be used on a single line at a time.
 pub fn lex(input : &str) -> Vec<String> {
-    let mut lexer = Lexer { escaping: false, state: QuoteStatus::None };
+    let mut lexer = Lexer { escaping: false, state: LexerState::Normal };
     let mut result : Vec<String> = vec![];
     let whitespace = vec![' ', '\n', '\t'];
     let mut current_lexeme = String::new();
@@ -86,7 +92,7 @@ pub fn lex(input : &str) -> Vec<String> {
 
         // TODO(Skyler) Fix terrible hack to make escaping work
         match lexer.state {
-            QuoteStatus::Weak => {
+            LexerState::WeakQuoting => {
                 if lexer.escaping && !special.contains(&character) {
                     current_lexeme.push('\\');
                 }
@@ -101,9 +107,9 @@ pub fn lex(input : &str) -> Vec<String> {
 
         if whitespace.contains(&character) {
             match lexer.state {
-                QuoteStatus::Weak => {
+                LexerState::WeakQuoting => {
                 }
-                QuoteStatus::Strong => (),
+                LexerState::StrongQuoting => (),
                 _ => {
                     if !current_lexeme.is_empty() {
                         result.push(current_lexeme);
@@ -170,6 +176,13 @@ mod tests {
     fn lex_weak_quote_escape() {
         let expected = vec!["\\t$`\\o"];
         let actual = lex("\"\\\\t\\$\\`\\o\"\n");
+        assert_eq!(expected, actual);
+    }
+
+    #[test]
+    fn lex_comment() {
+        let expected = vec!["okay"];
+        let actual = lex("okay#${}()\";'a\\\n");
         assert_eq!(expected, actual);
     }
 
