@@ -29,7 +29,6 @@ enum LexerQuotingState {
     Normal,
     WeakQuoting,
     StrongQuoting,
-    HereDoc,
     Comment,
 }
 
@@ -44,7 +43,7 @@ impl Lexer {
         match self.state {
             LexerQuotingState::WeakQuoting => process_char_weak_quote(self, character),
             LexerQuotingState::StrongQuoting => process_char_strong_quote(self, character),
-            LexerQuotingState::Comment => process_char_comment(self, character),
+            LexerQuotingState::Comment => process_char_comment(),
             _ => process_char_normal(self, character),
         }
     }
@@ -136,7 +135,7 @@ fn process_char_normal(lexer : &mut Lexer, character : char) -> Option<char> {
     Some(character)
 }
 
-fn process_char_comment(lexer : &mut Lexer,  character : char) -> Option<char> {
+fn process_char_comment() -> Option<char> {
     None
 }
 
@@ -176,7 +175,6 @@ pub fn lex(input : &str) -> Vec<String> {
         tokens : vec![],
         current_token_type : TokenType::Undetermined,
     };
-    let whitespace = vec![' ', '\n', '\t'];
     let special = vec!['`', '$', '\\'];  // Part of terrible escape hack
     for character in input.chars() {
 

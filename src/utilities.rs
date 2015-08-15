@@ -1,5 +1,34 @@
 use std::env;
 use std::process;
+use std::collections::HashMap;
+
+use super::shell;
+
+pub fn alias(shell : &mut shell::Shell, args : &Vec<String>) {
+    if args.len() == 0 {
+        for alias in shell.aliases.keys() {
+            print_alias(&shell.aliases, alias);
+        }
+    }
+    for arg in args.iter() {
+        let mut split = arg.splitn(2, "=");
+        let alias_name = split.next().unwrap();
+        let alias_value = split.next();
+        if alias_value.is_some() {
+            shell.aliases.insert(alias_name.to_string(), alias_value.unwrap().to_string());
+        }
+        else {
+            print_alias(&shell.aliases, &alias_name.to_string());
+        }
+    }
+}
+
+fn print_alias(aliases : &HashMap<String, String>, alias : &String) {
+    match aliases.get(alias) {
+        Some(alias_value) => println!("alias {}='{}'", alias, alias_value),
+        None => println!("nosh: alias: {}: not found", alias)
+    }
+}
 
 pub fn cd(args : &Vec<String>) {
     match args.first() {
@@ -47,9 +76,9 @@ pub fn exit() {
 mod tests {
 
     use super::*;
+    use super::super::shell;
     use std::env;
     use std::sync::Mutex;
-    use std::thread;
 
     extern crate tempdir;
 
@@ -158,6 +187,14 @@ mod tests {
         cd(&string_vec(vec![parent_path]));
         cd(&string_vec(vec![child_dir_name]));
         assert_eq!(child_path, env::current_dir().ok().unwrap().to_str().unwrap());
+    }
+
+    #[test]
+    fn add_alias() {
+        let mut shell = shell::Shell::new();
+        let args : &Vec<String> = &string_vec(vec!["ll=ls -l"]);
+        alias(&mut shell, args);
+        assert_eq!(shell.aliases.get(&"ll".to_string()).unwrap(), &"ls -l".to_string());
     }
 
 }

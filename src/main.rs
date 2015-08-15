@@ -1,8 +1,7 @@
-use std::io;
-use std::io::Write;
+#![feature(drain)]
+
 use std::process::Command;
 use std::process::ExitStatus;
-use std::iter::FromIterator;
 
 #[macro_use]
 extern crate lazy_static;
@@ -10,13 +9,16 @@ extern crate readline;
 
 mod utilities;
 mod lexer;
+mod shell;
+mod expansion;
 
-fn main() {
+pub fn main() {
+    let mut shell = shell::Shell::new();
     loop {
         let mut input = readline::readline(&get_ps1()).unwrap();
         readline::add_history(&input);
         input.push('\n');
-        run(&input);
+        run(&mut shell, &input);
     }
 }
 
@@ -27,15 +29,16 @@ fn get_ps1() -> String {
     }
 }
 
-pub fn run(command : &str) -> Option<ExitStatus> {
-    let mut iter = lexer::lex(command).into_iter();
+pub fn run(shell : &mut shell::Shell, command : &str) -> Option<ExitStatus> {
+    let mut lexed = lexer::lex(command);
+    let mut iter = expansion::expand_aliases(&shell.aliases, &mut lexed).into_iter();
     let program = match iter.next() {
         Some(program) => program,
         None => return None
     };
     let args = iter.collect::<Vec<_>>();
 
-    if run_builtin_if_possible(&program, &args) {
+    if run_builtin_if_possible(shell, &program, &args) {
         return None;
     }
     let mut command = build_command(&program, &args);
@@ -51,8 +54,12 @@ fn build_command(program : &str, args : &Vec<String>) -> Command {
     command
 }
 
-fn run_builtin_if_possible(program: &str, args: &Vec<String>) -> bool {
+fn run_builtin_if_possible(shell : &mut shell::Shell, program: &str, args: &Vec<String>) -> bool {
     match program {
+        "alias" => {
+            utilities::alias(shell, args);
+            true
+        }
         "cd" => {
             utilities::cd(args);
             true
@@ -69,25 +76,30 @@ fn run_builtin_if_possible(program: &str, args: &Vec<String>) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use super::shell;
 
     #[test]
     fn run_ls_should_be_some() {
-        assert!(run("ls\n").is_some());
+        let mut shell = shell::Shell::new();
+        assert!(run(&mut shell, "ls\n").is_some());
     }
 
     #[test]
     fn run_ls_with_args_should_be_some() {
-        assert!(run("ls -a").is_some());
+        let mut shell = shell::Shell::new();
+        assert!(run(&mut shell, "ls -a").is_some());
     }
 
     #[test]
     fn run_empty_string_should_be_none() {
-        assert!(run("").is_none());
+        let mut shell = shell::Shell::new();
+        assert!(run(&mut shell, "").is_none());
     }
 
     #[test]
     fn run_gibberish_should_not_panic() {
-        run("asdf-");
+        let mut shell = shell::Shell::new();
+        run(&mut shell, "asdf-");
     }
 
 }
